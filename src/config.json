@@ -1,0 +1,5 @@
+{
+  "allowedUsers": ["ShortggYT20", "shortggyt20", "Remote Server"],
+  "allowedCommanderlc": ["pm", "m", "h", "log"],
+  "allowedcommands": [":cmd"]
+}
