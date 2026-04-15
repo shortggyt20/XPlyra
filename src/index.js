@@ -19,24 +19,301 @@ const client = new Client({
   ],
 });
 
+// ================= SERVER CACHE =================
+let serverCache = {
+  data: null,
+  online: false
+};
+
+async function updateServerCache() {
+  try {
+    const res = await fetch(
+      'https://api.policeroleplay.community/v2/server?Players=true&Vehicles=true&JoinLogs=true&KillLogs=true&CommandLogs=true&ModCalls=true',
+      { headers: { 'server-key': process.env.PRC_KEY } }
+    );
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+
+    serverCache.data = data;
+    serverCache.online = (data?.CurrentPlayers || 0) > 0;
+
+  } catch (err) {
+    console.error("Cache Error:", err.message);
+  }
+}
+// ===============================================
+
+
 // ================= READY =================
 client.on('clientReady', async (c) => {
-  LOG_CHANNEL_ID = '1493300920908382411';
-  logChannel = await client.channels.fetch(LOG_CHANNEL_ID);
-
   console.log(`✅ ${c.user.tag} is online.`);
   client.user.setActivity('🛡️ XPlyra Network 🛡️', { type: ActivityType.Playing });
   client.user.setStatus('dnd');
 
+  // 🔥 ONLY API CALL IN ENTIRE BOT
+  updateServerCache();
+  const CACHE_INTERVAL = 5 * 1000;
+  setInterval(updateServerCache, CACHE_INTERVAL);
+
+  // Start loggers
   startJoinLogger();
   startCommandLogger();
   startKillLogger();
+  startModLogger();
 });
 
-// ================= VERIFY SYSTEM =================
+function startJoinLogger() {
+  const CHANNEL_ID = '1486158915111489608';
+  const INTERVAL = 5000;
+
+  let seen = new Set();
+  let init = false;
+
+  setInterval(async () => {
+    try {
+      const data = serverCache.data;
+      if (!data || !serverCache.online) return;
+
+      const logs = data.JoinLogs || [];
+      const channel = await client.channels.fetch(CHANNEL_ID);
+
+      if (!init) {
+        logs.forEach(l => seen.add(`${l.Player}-${l.Timestamp}`));
+        init = true;
+        return;
+      }
+
+      const fresh = logs.filter(l => !seen.has(`${l.Player}-${l.Timestamp}`));
+
+      for (const log of fresh.reverse()) {
+        if (!log.Player) continue;
+
+        const [name, id] = log.Player.split(":");
+        const url = `https://roblox.com/users/${id}/profile`;
+        const time = `<t:${log.Timestamp}:T>`;
+
+        await channel.send(
+          log.Join
+            ? `<:Add:1490143650049425428> **[${name}](${url})** joined at ${time}`
+            : `<:Subtrack:1490143673109971014> **[${name}](${url})** left at ${time}`
+        );
+
+        seen.add(`${log.Player}-${log.Timestamp}`);
+      }
+
+    } catch (err) {
+      console.error("Join Logger Error:", err.message);
+    }
+  }, INTERVAL);
+}
+
+function startCommandLogger() {
+  const CHANNEL_ID = '1485396851627790409';
+  const INTERVAL = 5000;
+
+  let seen = new Set();
+  let init = false;
+
+  setInterval(async () => {
+    try {
+      const data = serverCache.data;
+      if (!data || !serverCache.online) return;
+
+      const logs = data.CommandLogs || [];
+      const channel = await client.channels.fetch(CHANNEL_ID);
+
+      if (!init) {
+        logs.forEach(l => seen.add(`${l.Player}-${l.Timestamp}`));
+        init = true;
+        return;
+      }
+
+      const fresh = logs.filter(l => !seen.has(`${l.Player}-${l.Timestamp}`));
+
+      for (const log of fresh.reverse()) {
+        if (!log.Player) continue;
+
+        const [name, id] = log.Player.split(":");
+        const url = `https://roblox.com/users/${id}/profile`;
+        const time = `<t:${log.Timestamp}:T>`;
+
+        await channel.send(
+          `<:Cmd:1493298928282632272> **[${name}](${url})** ran \`${log.Command}\` at ${time}`
+        );
+
+        seen.add(`${log.Player}-${log.Timestamp}`);
+      }
+
+    } catch (err) {
+      console.error("Command Logger Error:", err.message);
+    }
+  }, INTERVAL);
+}
+
+function startKillLogger() {
+  const CHANNEL_ID = '1488951297787826410';
+  const INTERVAL = 5000;
+
+  let seen = new Set();
+  let init = false;
+
+  setInterval(async () => {
+    try {
+      const data = serverCache.data;
+      if (!data || !serverCache.online) return;
+
+      const logs = data.KillLogs || [];
+      const channel = await client.channels.fetch(CHANNEL_ID);
+
+      if (!init) {
+        logs.forEach(l => seen.add(`${l.Killer}-${l.Victim}-${l.Timestamp}`));
+        init = true;
+        return;
+      }
+
+      const fresh = logs.filter(l => !seen.has(`${l.Killer}-${l.Victim}-${l.Timestamp}`));
+
+      for (const log of fresh.reverse()) {
+        if (!log.Killer || !log.Victim) continue;
+
+        const [kName, kId] = log.Killer.split(":");
+        const [vName, vId] = log.Victim.split(":");
+
+        const kUrl = `https://roblox.com/users/${kId}/profile`;
+        const vUrl = `https://roblox.com/users/${vId}/profile`;
+        const time = `<t:${log.Timestamp}:T>`;
+
+        await channel.send(
+          `<:kill:1493356356357455898> **[${kName}](${kUrl})** eliminated **[${vName}](${vUrl})** at ${time}`
+        );
+
+        seen.add(`${log.Killer}-${log.Victim}-${log.Timestamp}`);
+      }
+
+    } catch (err) {
+      console.error("Kill Logger Error:", err.message);
+    }
+  }, INTERVAL);
+}
+
+function startModLogger() {
+  const CHANNEL_ID = '1485396851627790409';
+  const INTERVAL = 5000;
+
+  let seen = new Set();
+  let init = false;
+
+  setInterval(async () => {
+    try {
+      const data = serverCache.data;
+      if (!data || !serverCache.online) return;
+
+      const logs = data.ModCalls || [];
+      const channel = await client.channels.fetch(CHANNEL_ID);
+
+      if (!init) {
+        logs.forEach(l => seen.add(`${l.Caller}-${l.Moderator}-${l.Timestamp}`));
+        init = true;
+        return;
+      }
+
+      const fresh = logs.filter(l =>
+        !seen.has(`${l.Caller}-${l.Moderator}-${l.Timestamp}`)
+      );
+
+      for (const log of fresh.reverse()) {
+
+        let callerName = "Unknown", callerId = null;
+        let modName = "Unknown", modId = null;
+
+        if (log.Caller?.includes(":"))
+          [callerName, callerId] = log.Caller.split(":");
+
+        if (log.Moderator?.includes(":"))
+          [modName, modId] = log.Moderator.split(":");
+
+        const callerUrl = callerId ? `https://roblox.com/users/${callerId}/profile` : null;
+        const modUrl = modId ? `https://roblox.com/users/${modId}/profile` : null;
+
+        const time = `<t:${log.Timestamp}:T>`;
+
+        await channel.send(
+          `<:Mod:1493720254306717808> **${callerUrl ? `[${callerName}](${callerUrl})` : callerName}** handled by **${modUrl ? `[${modName}](${modUrl})` : modName}** at ${time}`
+        );
+
+        seen.add(`${log.Caller}-${log.Moderator}-${log.Timestamp}`);
+      }
+
+    } catch (err) {
+      console.error("Mod Logger Error:", err.message);
+    }
+  }, INTERVAL);
+}
+
+function startJoinLogger() {
+  const CHANNEL_ID = '1486158915111489608';
+  const INTERVAL = 5000;
+
+  let seen = new Set();
+  let init = false;
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(
+        'https://api.policeroleplay.community/v1/server/joinlogs',
+        {
+          headers: {
+            'server-key': process.env.PRC_KEY,
+            Accept: 'application/json'
+          }
+        }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const logs = await res.json();
+      const channel = await client.channels.fetch(CHANNEL_ID);
+
+      if (!Array.isArray(logs)) return;
+
+      // 🚫 prevent spam on startup
+      if (!init) {
+        logs.forEach(l => seen.add(`${l.Player}-${l.Timestamp}`));
+        init = true;
+        console.log("Join logger initialized");
+        return;
+      }
+
+      const fresh = logs.filter(l => !seen.has(`${l.Player}-${l.Timestamp}`));
+
+      for (const log of fresh.reverse()) {
+        if (!log.Player) continue;
+
+        const [name, id] = log.Player.split(":");
+        const url = id ? `https://www.roblox.com/users/${id}/profile` : null;
+        const time = `<t:${log.Timestamp}:T>`;
+
+        const msg = log.Join
+          ? `<:Add:1490143650049425428> **${url ? `[${name}](${url})` : name}** joined at ${time}`
+          : `<:Subtrack:1490143673109971014> **${url ? `[${name}](${url})` : name}** left at ${time}`;
+
+        await channel.send(msg);
+
+        seen.add(`${log.Player}-${log.Timestamp}`);
+      }
+
+    } catch (err) {
+      console.error("Join Logger Error:", err.message);
+    }
+  }, INTERVAL);
+}
+
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName === 'verify') {
+
       if (interaction.user.id !== '1270489291255976026') {
         return interaction.reply({ content: '❌ Not allowed.', ephemeral: true });
       }
@@ -92,150 +369,125 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.author.id !== '1270489291255976026') return;
 
-// ================= AUTO ROLE =================
-client.on('guildMemberAdd', (member) => {
-  const role = member.guild.roles.cache.find(r => r.name === 'UnVerifyed');
-  if (role) member.roles.add(role).catch(console.error);
+  if (message.content === '!players') {
+    try {
+      const res = await fetch(
+        'https://api.policeroleplay.community/v2/server?Players=true&Vehicles=true',
+        {
+          method: 'GET',
+          headers: {
+            "server-key": process.env.PRC_KEY,
+            "Accept": "*/*",
+          },
+        }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      const players = data.Players || [];
+      const vehicles = data.Vehicles || [];
+
+      const playerList = players.length
+        ? players.slice(0, 20).map(p => {
+            const [username, userId] = p.Player?.split(":") || ["Unknown", ""];
+
+            const ownedVehicles = vehicles
+              .filter(v => v.Owner === username)
+              .map(v => v.Name)
+              .join(', ') || "None";
+
+            const loc = p.Location || {};
+            const locationText = loc.PostalCode
+              ? `📍 ${loc.PostalCode} | ${loc.StreetName || "Unknown"} ${loc.BuildingNumber || ""}`
+              : "📍 Unknown";
+
+            return `<:Bracketleft:1493731052428988497> **${username}** <:Bracketright:1493731558023233698>
+<:dot:1493727753059438703> 🏷️ **${p.Permission || "Unknown"}**
+<:dot:1493727753059438703> 🚗 ${ownedVehicles}
+<:dot:1493727753059438703> Location: ${locationText}`;
+          }).join('\n\n')
+        : 'No players online';
+
+      const embed = new EmbedBuilder()
+        .setColor(0x000000)
+        .setTitle('<:Server:1493725741894991912> Player Data')
+        .setDescription(playerList)
+        .setFooter({ text: `Players: ${players.length} | Vehicles: ${vehicles.length}` })
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed] });
+
+    } catch (err) {
+      console.error("Player API Error:", err);
+      message.reply('❌ Failed to fetch player data.');
+    }
+  }
 });
 
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
 
-// ================= JOIN LOGGER =================
-function startJoinLogger() {
-  const CHANNEL_ID = '1486158915111489608';
-  const INTERVAL = 5000;
-
-  let seen = new Set();
-  let init = false;
-
-  setInterval(async () => {
+  if (message.content === '!serverinfo' || message.content === '!server') {
     try {
-      const res = await fetch('https://api.policeroleplay.community/v1/server/joinlogs', {
-        headers: { 'server-key': process.env.PRC_KEY }
-      });
+      const res = await fetch(
+        'https://api.policeroleplay.community/v2/server?Players=true',
+        {
+          headers: {
+            Accept: 'application/json',
+            'server-key': process.env.PRC_KEY
+          }
+        }
+      );
 
-      const logs = await res.json();
-      const channel = await client.channels.fetch(CHANNEL_ID);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      if (!init) {
-        logs.forEach(l => seen.add(`${l.Player}-${l.Timestamp}`));
-        init = true;
-        return;
+      const data = await res.json();
+
+      const name = data.Name || "Unknown";
+      const ownerId = data.OwnerId || null;
+      const players = `${data.CurrentPlayers || 0}/${data.MaxPlayers || 0}`;
+      const joinCode = data.JoinKey || "N/A";
+      const verified = data.AccVerifiedReq || "Unknown";
+      const balance = data.TeamBalance ? "Enabled" : "Disabled";
+
+      let ownerName = "Unknown";
+
+      if (ownerId) {
+        try {
+          const userRes = await fetch(`https://users.roblox.com/v1/users/${ownerId}`);
+          const userData = await userRes.json();
+          ownerName = userData.name || "Unknown";
+        } catch (err) {
+          console.error("Owner fetch failed:", err);
+        }
       }
 
-      const fresh = logs.filter(l => !seen.has(`${l.Player}-${l.Timestamp}`));
+      const embed = new EmbedBuilder()
+        .setColor(0x000000)
+        .setTitle('<:Server:1493725741894991912> Server Information')
+        .addFields(
+          { name: '🏷️ Server Name', value: `<:dot:1493727753059438703> **${name}**` },
+          { name: '👑 Owner', value: `**[${ownerName}](https://www.roblox.com/users/${ownerId}/profile)**` },
+          { name: '👥 Players', value: players, inline: true },
+          { name: '🔑 Join Code', value: `\`${joinCode}\``, inline: true },
+          { name: '✅ Verification', value: verified, inline: true },
+          { name: '⚖️ Team Balance', value: balance, inline: true }
+        )
+        .setTimestamp();
 
-      for (const log of fresh.reverse()) {
-        const [name, id] = log.Player.split(":");
-        const url = `https://roblox.com/users/${id}/profile`;
-        const time = `<t:${log.Timestamp}:T>`;
-
-        await channel.send(
-          log.Join
-            ? `<:Add:1490143650049425428> **[${name}](${url})** joined at ${time}`
-            : `<:Subtrack:1490143673109971014> **[${name}](${url})** left at ${time}`
-        );
-
-        seen.add(`${log.Player}-${log.Timestamp}`);
-      }
+      await message.reply({ embeds: [embed] });
 
     } catch (err) {
-      console.error(err);
+      console.error("Server Info API Error:", err);
+      message.reply('❌ Failed to fetch server info.');
     }
-  }, INTERVAL);
-}
+  }
+});
 
-
-// ================= COMMAND LOGGER =================
-function startCommandLogger() {
-  const CHANNEL_ID = '1485396851627790409';
-  const INTERVAL = 5000;
-
-  let seen = new Set();
-  let init = false;
-
-  setInterval(async () => {
-    try {
-      const res = await fetch('https://api.policeroleplay.community/v1/server/commandlogs', {
-        headers: { 'server-key': process.env.PRC_KEY }
-      });
-
-      const logs = await res.json();
-      const channel = await client.channels.fetch(CHANNEL_ID);
-
-      if (!init) {
-        logs.forEach(l => seen.add(`${l.Player}-${l.Timestamp}`));
-        init = true;
-        return;
-      }
-
-      const fresh = logs.filter(l => !seen.has(`${l.Player}-${l.Timestamp}`));
-
-      for (const log of fresh.reverse()) {
-        const [name, id] = log.Player.split(":");
-        const url = `https://roblox.com/users/${id}/profile`;
-        const time = `<t:${log.Timestamp}:T>`;
-
-        await channel.send(
-          `<:Cmd:1493298928282632272> **[${name}](${url})** ran \`${log.Command}\` at ${time}`
-        );
-
-        seen.add(`${log.Player}-${log.Timestamp}`);
-      }
-
-    } catch (err) {
-      console.error(err);
-    }
-  }, INTERVAL);
-}
-
-
-// ================= KILL LOGGER =================
-function startKillLogger() {
-  const CHANNEL_ID = '1488951297787826410';
-  const INTERVAL = 5000;
-
-  let seen = new Set();
-  let init = false;
-
-  setInterval(async () => {
-    try {
-      const res = await fetch('https://api.policeroleplay.community/v1/server/killlogs', {
-        headers: { 'server-key': process.env.PRC_KEY }
-      });
-
-      const logs = await res.json();
-      const channel = await client.channels.fetch(CHANNEL_ID);
-
-      if (!init) {
-        logs.forEach(l => seen.add(`${l.Killer}-${l.Victim}-${l.Timestamp}`));
-        init = true;
-        return;
-      }
-
-      const fresh = logs.filter(l => !seen.has(`${l.Killer}-${l.Victim}-${l.Timestamp}`));
-
-      for (const log of fresh.reverse()) {
-        const [kName, kId] = log.Killer.split(":");
-        const [vName, vId] = log.Victim.split(":");
-
-        const kUrl = `https://roblox.com/users/${kId}/profile`;
-        const vUrl = `https://roblox.com/users/${vId}/profile`;
-        const time = `<t:${log.Timestamp}:T>`;
-
-        await channel.send(
-          `<:kill:1493356356357455898> **[${kName}](${kUrl})** eliminated **[${vName}](${vUrl})** at ${time}`
-        );
-
-        seen.add(`${log.Killer}-${log.Victim}-${log.Timestamp}`);
-      }
-
-    } catch (err) {
-      console.error(err);
-    }
-  }, INTERVAL);
-}
-
-
-// ================= LOGIN =================
 client.login(process.env.TOKEN);
