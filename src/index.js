@@ -1,5 +1,6 @@
 const config = require("./config.json");
 require('dotenv').config();
+
 const {
   Client,
   IntentsBitField,
@@ -8,6 +9,7 @@ const {
   ButtonStyle,
   ActionRowBuilder,
   ActivityType,
+  MessageFlags
 } = require('discord.js');
 
 const client = new Client({
@@ -486,6 +488,149 @@ client.on('messageCreate', async (message) => {
     } catch (err) {
       console.error("Server Info API Error:", err);
       message.reply('❌ Failed to fetch server info.');
+    }
+  }
+});
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (message.content === '!help') {
+    const embed = new EmbedBuilder()
+      .setColor(0x000000)
+      .setTitle('XPlyra Bot Commands')
+      .setDescription('List of available commands:')
+      .addFields(
+        { name: '!verify', value: 'Sends the verification embed.' },
+        { name: '!players', value: 'Shows current players and their vehicles.' },
+        { name: '!serverinfo / !server', value: 'Displays server information.' }
+      )
+      .setFooter({ text: 'XPlyra Network' })
+      .setTimestamp();  
+
+    await message.reply({ embeds: [embed] });
+  }
+});
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  if (message.content.toLowerCase() === '!bans') {
+    try {
+
+      const res = await fetch("https://api.policeroleplay.community/v1/server/bans", {
+        headers: {
+          "server-key": process.env.PRC_KEY,
+          "Accept": "*/*"
+        }
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const bans = await res.json();
+      const entries = Object.entries(bans);
+
+      let description = "";
+
+      if (!entries.length) {
+        description = "No active bans.";
+      } else {
+        entries.slice(0, entries.length).forEach(([id, username], i) => {
+          description += `**${i + 1}.** ${username} (\`${id}\`)\n`;
+        });
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle("🚫 ERLC Ban List")
+        .setDescription(description)
+        .setColor(0xff0000)
+        .setFooter({ text: `Total Bans: ${entries.length}` })
+        .setTimestamp();
+
+      // 🔒 send privately (hidden alternative)
+      await message.reply({ embeds: [embed], ephemeral: true });
+
+      // optional: delete command message
+      await message.delete().catch(() => {});
+
+    } catch (err) {
+      console.error(err);
+      message.reply("❌ Failed to fetch ban list.");
+    }
+  }
+});
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  if (!message.content.startsWith('!purge')) return;
+
+  // permission check
+  if (!message.member.permissions.has('ManageMessages')) {
+    return message.reply("❌ You don't have permission to use this.");
+  }
+
+  const args = message.content.split(' ');
+  const amount = parseInt(args[1]);
+
+  if (!amount || amount < 1 || amount > 100) {
+    return message.reply("❌ Please provide a number between 1 and 100.");
+  }
+
+  try {
+    // fetch + bulk delete
+    const deleted = await message.channel.bulkDelete(amount, true);
+
+    const reply = await message.channel.send(`🧹 Deleted ${deleted.size} messages.`);
+
+    setTimeout(() => reply.delete().catch(() => {}), 3000);
+
+  } catch (err) {
+    console.error(err);
+    message.reply("❌ Failed to delete messages. (Messages may be older than 14 days)");
+  }
+});
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  if (!message.content.startsWith('!cmdr ')) return;
+
+  const args = message.content.slice(7).trim().split(' ');
+  const action = args[0];
+  const target = args.slice(1).join(' ');
+
+  if (!action) {
+    return message.reply("❌ Usage: !cmdr <command> <args>");
+  }
+
+  const erlcCommand = target
+    ? `:${action} ${target}`
+    : `:${action}`;
+
+  try {
+    const res = await fetch("https://api.policeroleplay.community/v1/server/command", {
+      method: "POST",
+      headers: {
+        "server-key": process.env.PRC_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        command: erlcCommand
+      })
+    });
+
+    const text = await res.text(); // helpful for debugging
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} - ${text}`);
+    }
+
+    return message.reply(`✅ Sent: \`${erlcCommand}\``);
+
+  } catch (err) {
+    if (err.message.includes('3002')) {
+      console.error(err);
+      return message.reply("❌ ERLC said the server is offline. Command not sent.");
     }
   }
 });
