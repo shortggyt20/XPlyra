@@ -30,8 +30,8 @@ let serverCache = {
 async function updateServerCache() {
   try {
     const res = await fetch(
-      'https://api.policeroleplay.community/v2/server?Players=true&Vehicles=true&JoinLogs=true&KillLogs=true&CommandLogs=true&ModCalls=true',
-      { headers: { 'server-key': process.env.PRC_KEY } }
+      'https://api.erlc.gg/v2/server?Players=true&Staff=true&JoinLogs=true&Queue=true&KillLogs=true&CommandLogs=true&ModCalls=true&EmergencyCalls=true&Vehicles=true',
+      { headers: { 'server-key': 'bnaXvJykjFESfhEzWRux-FmqSIYJehWTHtxAVuMMfxzDbKwHEejglcfkauUAy' } }
     );
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -264,7 +264,7 @@ function startJoinLogger() {
   setInterval(async () => {
     try {
       const res = await fetch(
-        'https://api.policeroleplay.community/v1/server/joinlogs',
+        'https://api.erlc.gg/v2/server?Players=true&Staff=true&JoinLogs=true&Queue=true&KillLogs=true&CommandLogs=true&ModCalls=true&EmergencyCalls=true&Vehicles=true',
         {
           headers: {
             'server-key': process.env.PRC_KEY,
@@ -378,7 +378,7 @@ client.on('messageCreate', async (message) => {
   if (message.content === '!players') {
     try {
       const res = await fetch(
-        'https://api.policeroleplay.community/v2/server?Players=true&Vehicles=true',
+        'https://api.erlc.gg/v2/server?Players=true&Staff=true&JoinLogs=true&Queue=true&KillLogs=true&CommandLogs=true&ModCalls=true&EmergencyCalls=true&Vehicles=true',
         {
           method: 'GET',
           headers: {
@@ -438,7 +438,7 @@ client.on('messageCreate', async (message) => {
   if (message.content === '!serverinfo' || message.content === '!server') {
     try {
       const res = await fetch(
-        'https://api.policeroleplay.community/v2/server?Players=true',
+        'https://api.erlc.gg/v2/server?Players=true&Staff=true&JoinLogs=true&Queue=true&KillLogs=true&CommandLogs=true&ModCalls=true&EmergencyCalls=true&Vehicles=true',
         {
           headers: {
             Accept: 'application/json',
@@ -517,7 +517,7 @@ client.on('messageCreate', async (message) => {
   if (message.content.toLowerCase() === '!bans') {
     try {
 
-      const res = await fetch("https://api.policeroleplay.community/v1/server/bans", {
+      const res = await fetch("https://api.erlc.gg/v2/server?Players=true&Staff=true&JoinLogs=true&Queue=true&KillLogs=true&CommandLogs=true&ModCalls=true&EmergencyCalls=true&Vehicles=true", {
         headers: {
           "server-key": process.env.PRC_KEY,
           "Accept": "*/*"
@@ -608,7 +608,7 @@ client.on('messageCreate', async (message) => {
     : `:${action}`;
 
   try {
-    const res = await fetch("https://api.policeroleplay.community/v1/server/command", {
+    const res = await fetch("https://api.erlc.gg/v2/server/command", {
       method: "POST",
       headers: {
         "server-key": process.env.PRC_KEY,
